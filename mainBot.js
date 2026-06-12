@@ -206,7 +206,7 @@ bot.on('channel_post', async (ctx) => {
     const text = ctx.channelPost.text || '';
     
     const trxMatch = text.match(/\b([A-Z0-9]{8,12})\b/);
-    const amtMatch = text.match(/(?:Tk|BDT|Amount|৳)\s*[:.-]?\s*([\d,]+(?:\.\d+)?)/i);
+    const amtMatch = text.match(/(?:Tk|BDT|Amount|Ammount|৳)\s*[:.-]?\s*([\d,]+(?:\.\d+)?)/i);
     
     if (trxMatch && amtMatch) {
         const trxId = trxMatch[1];
