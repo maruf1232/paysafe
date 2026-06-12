@@ -6,6 +6,11 @@ const bot = new Telegraf(process.env.MAIN_BOT_TOKEN);
 const localSession = new LocalSession({ database: 'main_session_db.json' });
 bot.use(localSession.middleware());
 
+bot.catch((err, ctx) => {
+    console.error(`Error for ${ctx.updateType}:`, err);
+    ctx.reply('❌ An internal error occurred. (Possible reason: Database tables are missing. Please complete the Supabase SQL setup!).').catch(() => {});
+});
+
 const ADMIN_CHANNEL_ID = '-1003838765118';
 
 // Main Menu Keyboard

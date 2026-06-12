@@ -6,6 +6,11 @@ const bot = new Telegraf(process.env.ADMIN_BOT_TOKEN);
 const localSession = new LocalSession({ database: 'admin_session_db.json' });
 bot.use(localSession.middleware());
 
+bot.catch((err, ctx) => {
+    console.error(`Error for ${ctx.updateType}:`, err);
+    ctx.reply('❌ An internal error occurred. Please check server logs.').catch(() => {});
+});
+
 // Simple in-memory auth for admin
 const authedUsers = new Set();
 const PASSCODE = 'maruf1232';
