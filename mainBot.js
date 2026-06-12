@@ -94,7 +94,7 @@ bot.action('reveal_details', async (ctx) => {
 
     const successMsg = `🎉 **Account Purchased Successfully!**\n\n📧 Email: \`${account.email}\`\n🔑 Password: \`${account.password}\`\n\n📌 **Instructions:** Please connect to a UK VPN, create a new UK payment profile, and then create your Paysafe account.`;
     
-    ctx.replyWithAnimation('https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif', {
+    ctx.replyWithAnimation('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe_card_animation_successful_202606122046.mp4', {
         caption: successMsg,
         parse_mode: 'Markdown'
     }).catch(() => {
