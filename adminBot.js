@@ -16,16 +16,16 @@ const authedUsers = new Set();
 const PASSCODE = 'maruf1232';
 
 const BROADCAST_TEMPLATES = {
-    'temp_1': { title: '🎁 Mega Discount', text: '📢 **Official Update**\n\n🎁 **MEGA DISCOUNT OFFER!**\n\nThe price of premium UK Paysafe accounts has just dropped!\n\n> ~500 TK~ 👉 **200 TK Only!**\n\n🔥 Buy now before the stock runs out!' },
-    'temp_2': { title: '💳 Stock Alert', text: '📢 **Official Update**\n\n💳 **NEW ACCOUNTS ADDED!**\n\nFresh premium UK Paysafe accounts are now available in stock.\n\n> ✅ **100% Verified Accounts**\n> ✅ **Instant Delivery**\n\nGrab yours quickly!' },
-    'temp_3': { title: '⚠️ Important Notice', text: '📢 **Official Update**\n\n⚠️ **IMPORTANT NOTICE**\n\nPlease make sure to use valid TrxIDs when depositing. Fake TrxIDs will lead to a ban.\n\n> *Thank you for your cooperation!*' },
-    'temp_4': { title: '🎁 Bonus Offer', text: '📢 **Official Update**\n\n🎁 **DEPOSIT BONUS!**\n\nDeposit today and get an extra 10% bonus added to your balance automatically!\n\n> ⏳ *Offer valid for a limited time only.*' },
-    'temp_5': { title: '⚙️ Maintenance', text: '📢 **Official Update**\n\n⚙️ **SYSTEM MAINTENANCE**\n\nThe bot will undergo short maintenance soon to upgrade our servers. We will be back online shortly!' },
-    'temp_6': { title: '⚡ Fast Deposit', text: '📢 **Official Update**\n\n⚡ **INSTANT DEPOSITS**\n\nOur deposit verification system has been upgraded! Your deposits will now be verified even faster.' },
-    'temp_7': { title: '🏆 Ref Contest', text: '📢 **Official Update**\n\n🏆 **REFERRAL CONTEST!**\n\nInvite the most users this week and win a special cash prize directly to your balance!' },
-    'temp_8': { title: '🔥 Flash Sale', text: '📢 **Official Update**\n\n🔥 **WEEKEND FLASH SALE!**\n\nEnjoy discounted prices all weekend long on bulk purchases.' },
-    'temp_9': { title: '💎 Top Buyer', text: '📢 **Official Update**\n\n💎 **TOP BUYER REWARDS!**\n\nOur most loyal customers will receive a free account at the end of this month!' },
-    'temp_10': { title: '🎉 Giveaway', text: '📢 **Official Update**\n\n🎉 **EXCLUSIVE GIVEAWAY!**\n\nParticipate in our new giveaway event on our channel and win free Paysafe accounts!' }
+    'temp_1': { title: '🎁 Mega Discount', text: '📢 <b>Official Update</b>\n\n🎁 <b>MEGA DISCOUNT OFFER!</b>\n\nThe price of premium UK Paysafe accounts has just dropped!\n\n<blockquote><s>500 TK</s> 👉 <b>200 TK Only!</b></blockquote>\n\n🔥 Buy now before the stock runs out!' },
+    'temp_2': { title: '💳 Stock Alert', text: '📢 <b>Official Update</b>\n\n💳 <b>NEW ACCOUNTS ADDED!</b>\n\nFresh premium UK Paysafe accounts are now available in stock.\n\n<blockquote>✅ <b>100% Verified Accounts</b>\n✅ <b>Instant Delivery</b></blockquote>\n\nGrab yours quickly!' },
+    'temp_3': { title: '⚠️ Important Notice', text: '📢 <b>Official Update</b>\n\n⚠️ <b>IMPORTANT NOTICE</b>\n\nPlease make sure to use valid TrxIDs when depositing. Fake TrxIDs will lead to a ban.\n\n<blockquote><i>Thank you for your cooperation!</i></blockquote>' },
+    'temp_4': { title: '🎁 Bonus Offer', text: '📢 <b>Official Update</b>\n\n🎁 <b>DEPOSIT BONUS!</b>\n\nDeposit today and get an extra 10% bonus added to your balance automatically!\n\n<blockquote>⏳ <i>Offer valid for a limited time only.</i></blockquote>' },
+    'temp_5': { title: '⚙️ Maintenance', text: '📢 <b>Official Update</b>\n\n⚙️ <b>SYSTEM MAINTENANCE</b>\n\nThe bot will undergo short maintenance soon to upgrade our servers. We will be back online shortly!' },
+    'temp_6': { title: '⚡ Fast Deposit', text: '📢 <b>Official Update</b>\n\n⚡ <b>INSTANT DEPOSITS</b>\n\nOur deposit verification system has been upgraded! Your deposits will now be verified even faster.' },
+    'temp_7': { title: '🏆 Ref Contest', text: '📢 <b>Official Update</b>\n\n🏆 <b>REFERRAL CONTEST!</b>\n\nInvite the most users this week and win a special cash prize directly to your balance!' },
+    'temp_8': { title: '🔥 Flash Sale', text: '📢 <b>Official Update</b>\n\n🔥 <b>WEEKEND FLASH SALE!</b>\n\nEnjoy discounted prices all weekend long on bulk purchases.' },
+    'temp_9': { title: '💎 Top Buyer', text: '📢 <b>Official Update</b>\n\n💎 <b>TOP BUYER REWARDS!</b>\n\nOur most loyal customers will receive a free account at the end of this month!' },
+    'temp_10': { title: '🎉 Giveaway', text: '📢 <b>Official Update</b>\n\n🎉 <b>EXCLUSIVE GIVEAWAY!</b>\n\nParticipate in our new giveaway event on our channel and win free Paysafe accounts!' }
 };
 
 function getAdminKeyboard() {
@@ -39,7 +39,7 @@ function getAdminKeyboard() {
 function showAdminMenu(ctx) {
     ctx.session.state = null;
     ctx.session.broadcastDraft = null;
-    return ctx.reply('👨‍💻 **Admin Control Panel**\nChoose an option below:', { parse_mode: 'Markdown', ...getAdminKeyboard() });
+    return ctx.reply('👨‍💻 **Admin Control Panel**\nChoose an option below:', { parse_mode: 'HTML', ...getAdminKeyboard() });
 }
 
 bot.start((ctx) => {
@@ -61,7 +61,7 @@ bot.hears('➕ Add Account', (ctx) => {
     if (!authedUsers.has(ctx.from.id)) return;
     ctx.session.state = 'WAITING_FOR_ACCOUNT';
     const msg = `Send the accounts in this format:\n\n\`email=password,email2=password\`\n\nExample:\n\`maruf@gmail.com=Maruf1232,sakib@gmail.com=Sakib1233\``;
-    ctx.reply(msg, { parse_mode: 'Markdown', ...Markup.removeKeyboard() });
+    ctx.reply(msg, { parse_mode: 'HTML', ...Markup.removeKeyboard() });
 });
 
 bot.hears('👥 User Stats', async (ctx) => {
@@ -149,16 +149,16 @@ function sendBroadcastDraftPreview(ctx) {
     ]);
     
     if (draft.photo) {
-        ctx.replyWithPhoto(draft.photo, { caption: text, parse_mode: 'Markdown', ...kb });
+        ctx.replyWithPhoto(draft.photo, { caption: text, parse_mode: 'HTML', ...kb });
     } else {
-        ctx.reply(text, { parse_mode: 'Markdown', ...kb });
+        ctx.reply(text, { parse_mode: 'HTML', ...kb });
     }
 }
 
 bot.action('draft_edit_text', (ctx) => {
     ctx.session.state = 'WAITING_FOR_DRAFT_TEXT';
     const draftText = ctx.session.broadcastDraft?.text || '';
-    ctx.reply('Tap the text below to copy it, then edit and send it back:\n\n```\n' + draftText + '\n```', { parse_mode: 'Markdown' });
+    ctx.reply('Tap the text below to copy it, then edit and send it back:\n\n```\n' + draftText + '\n```', { parse_mode: 'HTML' });
     ctx.answerCbQuery();
 });
 

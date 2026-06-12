@@ -46,9 +46,8 @@ bot.start(async (ctx) => {
 
 bot.hears('👤 Profile', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
-    if (!user) return ctx.reply('Please /start the bot first.');
-    const msg = `👤 **Your Profile**\n\nID: \`${user.telegram_id}\`\nBalance: ${user.balance} TK\nTotal Referrals: ${user.total_referrals}`;
-    ctx.reply(msg, { parse_mode: 'Markdown' });
+    const msg = `👤 <b>Your Premium Profile</b>\n\n<blockquote>🆔 <b>User ID:</b> <code>${user.telegram_id}</code>\n💰 <b>Available Balance:</b> ${user.balance} TK\n👥 <b>Total Referrals:</b> ${user.total_referrals}</blockquote>\n\n<i>Keep referring friends to earn more!</i>`;
+    ctx.reply(msg, { parse_mode: 'HTML' });
 });
 
 bot.hears('🎁 Refer', async (ctx) => {

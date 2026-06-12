@@ -21,9 +21,9 @@ process.sendBroadcast = async (text, photoFileId, adminChatId) => {
     for (const uid of userIds) {
         try {
             if (photoFileId) {
-                await mainBot.telegram.sendPhoto(uid, photoFileId, { caption: text, parse_mode: 'Markdown' });
+                await mainBot.telegram.sendPhoto(uid, photoFileId, { caption: text, parse_mode: 'HTML' });
             } else {
-                await mainBot.telegram.sendMessage(uid, text, { parse_mode: 'Markdown' });
+                await mainBot.telegram.sendMessage(uid, text, { parse_mode: 'HTML' });
             }
             success++;
         } catch (e) {
@@ -35,7 +35,7 @@ process.sendBroadcast = async (text, photoFileId, adminChatId) => {
     console.log(`Broadcast finished. Success: ${success}, Fail: ${fail}`);
     if (adminChatId) {
         try {
-            await adminBot.telegram.sendMessage(adminChatId, `✅ **Broadcast Sent Successfully!**\n\n👥 Total Users Reached: ${success}\n❌ Failed: ${fail}`, { parse_mode: 'Markdown' });
+            await adminBot.telegram.sendMessage(adminChatId, `✅ **Broadcast Sent Successfully!**\n\n👥 Total Users Reached: ${success}\n❌ Failed: ${fail}`, { parse_mode: 'HTML' });
         } catch(e) {}
     }
     // Optionally notify the admin channel or specific admin
