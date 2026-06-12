@@ -12,7 +12,7 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-process.sendBroadcast = async (text, photoFileId) => {
+process.sendBroadcast = async (text, photoFileId, adminChatId) => {
     console.log('Starting broadcast...');
     const userIds = await require('./db').getAllUserIds();
     let success = 0;
@@ -33,6 +33,11 @@ process.sendBroadcast = async (text, photoFileId) => {
     }
     
     console.log(`Broadcast finished. Success: ${success}, Fail: ${fail}`);
+    if (adminChatId) {
+        try {
+            await adminBot.telegram.sendMessage(adminChatId, `✅ **Broadcast Sent Successfully!**\n\n👥 Total Users Reached: ${success}\n❌ Failed: ${fail}`, { parse_mode: 'Markdown' });
+        } catch(e) {}
+    }
     // Optionally notify the admin channel or specific admin
     try {
         await adminBot.telegram.sendMessage(process.env.ADMIN_CHANNEL_ID || '-1003838765118', `📢 Broadcast Report:\n✅ Success: ${success}\n❌ Failed: ${fail}`);

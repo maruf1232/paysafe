@@ -16,16 +16,16 @@ const authedUsers = new Set();
 const PASSCODE = 'maruf1232';
 
 const BROADCAST_TEMPLATES = {
-    'temp_1': { title: '🔥 Price Drop', text: '🔥 **Special Offer!**\n\nThe price of premium UK Paysafe accounts has just dropped! Buy now before the stock runs out!' },
-    'temp_2': { title: '🎁 Mega Offer', text: '🎁 **Mega Discount Offer!**\n\nDeposit today and get an extra bonus on your referrals!' },
-    'temp_3': { title: '💳 Stock Update', text: '💳 **New Accounts Added!**\n\nFresh premium UK Paysafe accounts are now available in stock. Grab yours quickly!' },
-    'temp_4': { title: '⚠️ Maintenance', text: '⚠️ **Bot Maintenance**\n\nThe bot will undergo short maintenance soon. We will be back online shortly!' },
-    'temp_5': { title: '🎉 Giveaway', text: '🎉 **Exclusive Giveaway!**\n\nParticipate in our new giveaway and win free Paysafe accounts!' },
-    'temp_6': { title: '⚡ Fast Deposit', text: '⚡ **Instant Deposit Enabled!**\n\nYour deposits will now be verified even faster!' },
-    'temp_7': { title: '👥 Ref Contest', text: '👥 **Referral Contest!**\n\nInvite the most users this week and win a special cash prize!' },
-    'temp_8': { title: '✨ Weekend Sale', text: '✨ **Weekend Flash Sale!**\n\nEnjoy discounted prices all weekend long!' },
-    'temp_9': { title: '🏆 Top Buyer', text: '🏆 **Top Buyer Rewards!**\n\nOur most loyal customers will receive a free account this month!' },
-    'temp_10': { title: '🔔 Notice', text: '🔔 **Important Notice**\n\nPlease make sure to use valid TrxIDs when depositing. Fake TrxIDs will lead to a ban.' }
+    'temp_1': { title: '🎁 Mega Discount', text: '📢 **Official Update**\n\n🎁 **MEGA DISCOUNT OFFER!**\n\nThe price of premium UK Paysafe accounts has just dropped!\n\n> ~500 TK~ 👉 **200 TK Only!**\n\n🔥 Buy now before the stock runs out!' },
+    'temp_2': { title: '💳 Stock Alert', text: '📢 **Official Update**\n\n💳 **NEW ACCOUNTS ADDED!**\n\nFresh premium UK Paysafe accounts are now available in stock.\n\n> ✅ **100% Verified Accounts**\n> ✅ **Instant Delivery**\n\nGrab yours quickly!' },
+    'temp_3': { title: '⚠️ Important Notice', text: '📢 **Official Update**\n\n⚠️ **IMPORTANT NOTICE**\n\nPlease make sure to use valid TrxIDs when depositing. Fake TrxIDs will lead to a ban.\n\n> *Thank you for your cooperation!*' },
+    'temp_4': { title: '🎁 Bonus Offer', text: '📢 **Official Update**\n\n🎁 **DEPOSIT BONUS!**\n\nDeposit today and get an extra 10% bonus added to your balance automatically!\n\n> ⏳ *Offer valid for a limited time only.*' },
+    'temp_5': { title: '⚙️ Maintenance', text: '📢 **Official Update**\n\n⚙️ **SYSTEM MAINTENANCE**\n\nThe bot will undergo short maintenance soon to upgrade our servers. We will be back online shortly!' },
+    'temp_6': { title: '⚡ Fast Deposit', text: '📢 **Official Update**\n\n⚡ **INSTANT DEPOSITS**\n\nOur deposit verification system has been upgraded! Your deposits will now be verified even faster.' },
+    'temp_7': { title: '🏆 Ref Contest', text: '📢 **Official Update**\n\n🏆 **REFERRAL CONTEST!**\n\nInvite the most users this week and win a special cash prize directly to your balance!' },
+    'temp_8': { title: '🔥 Flash Sale', text: '📢 **Official Update**\n\n🔥 **WEEKEND FLASH SALE!**\n\nEnjoy discounted prices all weekend long on bulk purchases.' },
+    'temp_9': { title: '💎 Top Buyer', text: '📢 **Official Update**\n\n💎 **TOP BUYER REWARDS!**\n\nOur most loyal customers will receive a free account at the end of this month!' },
+    'temp_10': { title: '🎉 Giveaway', text: '📢 **Official Update**\n\n🎉 **EXCLUSIVE GIVEAWAY!**\n\nParticipate in our new giveaway event on our channel and win free Paysafe accounts!' }
 };
 
 function getAdminKeyboard() {
@@ -157,7 +157,8 @@ function sendBroadcastDraftPreview(ctx) {
 
 bot.action('draft_edit_text', (ctx) => {
     ctx.session.state = 'WAITING_FOR_DRAFT_TEXT';
-    ctx.reply('Please type the new text for this broadcast:', Markup.removeKeyboard());
+    const draftText = ctx.session.broadcastDraft?.text || '';
+    ctx.reply('Tap the text below to copy it, then edit and send it back:\n\n```\n' + draftText + '\n```', { parse_mode: 'Markdown' });
     ctx.answerCbQuery();
 });
 
@@ -179,8 +180,8 @@ bot.action('draft_send', async (ctx) => {
     ctx.answerCbQuery('Sending broadcast...');
     const draft = ctx.session.broadcastDraft;
     if (draft && process.sendBroadcast) {
-        ctx.reply('Broadcast is processing in the background... You will be notified in the channel when it is done.', getAdminKeyboard());
-        process.sendBroadcast(draft.text, draft.photo);
+        ctx.reply('Broadcast is processing in the background... You will receive a message here when it is done.', getAdminKeyboard());
+        process.sendBroadcast(draft.text, draft.photo, ctx.chat.id);
         ctx.session.broadcastDraft = null;
     } else {
         ctx.reply('Failed to send broadcast or broadcast feature is unavailable.', getAdminKeyboard());
@@ -290,9 +291,9 @@ bot.on('message', async (ctx, next) => {
     if (state === 'WAITING_FOR_BROADCAST' && ctx.message.text) {
         const msg = ctx.message.text;
         ctx.session.state = null;
-        ctx.reply('Broadcast started... You will be notified in the admin channel when finished.', getAdminKeyboard());
+        ctx.reply('Broadcast started... You will receive a message here when it is done.', getAdminKeyboard());
         if (process.sendBroadcast) {
-            process.sendBroadcast(msg, null);
+            process.sendBroadcast(msg, null, ctx.chat.id);
             return;
         } else {
             return ctx.reply('Broadcast function not available.', getAdminKeyboard());
