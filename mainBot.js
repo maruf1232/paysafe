@@ -16,8 +16,8 @@ const ADMIN_CHANNEL_ID = '-1003838765118';
 // Main Menu Keyboard
 function getMainMenu() {
     return Markup.keyboard([
-        ['👤 Profile', '🎁 Refer'],
-        ['❓ Help', '💳 Paysafe', '💰 Deposit']
+        ['💳 Paysafe', '💰 Deposit'],
+        ['👤 Profile', '🎁 Refer', '❓ Help']
     ]).resize();
 }
 
