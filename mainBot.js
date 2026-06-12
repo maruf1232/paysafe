@@ -64,43 +64,106 @@ bot.hears('❓ Help', (ctx) => {
     ctx.reply(msg, { parse_mode: 'Markdown' });
 });
 
+function getPurchaseMessageAndKeyboard(qty, price, balance) {
+    const totalCost = qty * price;
+    const remaining = balance - totalCost;
+    
+    const msg = `💳 **Paysafe Account Purchase**\n\nPrice per account: ${price} TK\n\n🛒 **Purchase Summary**\nQuantity: ${qty}\nTotal Cost: ${totalCost} TK\nYour Balance: ${balance} TK\nAfter Purchase: ${remaining} TK`;
+    
+    // Keyboard logic:
+    // Left side: Buy - X
+    // Right side: ➖ (if qty > 1) and ➕
+    const buttons = [];
+    if (qty > 1) {
+        buttons.push(Markup.button.callback('➖', `qty_sub_${qty}`));
+    }
+    buttons.push(Markup.button.callback(`Buy - ${qty}`, `buy_qty_${qty}`));
+    buttons.push(Markup.button.callback('➕', `qty_add_${qty}`));
+    
+    const kb = Markup.inlineKeyboard([buttons]);
+    return { msg, kb };
+}
+
 bot.hears('💳 Paysafe', async (ctx) => {
     const settings = await db.getSettings();
-    const msg = `💳 **Paysafe Account**\n\nPrice: ${settings.account_price} TK\n\nClick the button below to buy and reveal details.`;
-    const kb = Markup.inlineKeyboard([
-        Markup.button.callback('🔍 Reveal Details', 'reveal_details')
-    ]);
-    ctx.replyWithPhoto('https://mms.businesswire.com/media/20240205162279/en/2021326/22/Paysafe_2024_Logo.jpg', { caption: msg, ...kb });
-});
-
-bot.action('reveal_details', async (ctx) => {
-    ctx.answerCbQuery();
     const user = await db.getUser(ctx.from.id);
-    const settings = await db.getSettings();
     const price = parseFloat(settings.account_price);
-
-    if (parseFloat(user.balance) < price) {
-        return ctx.reply(`❌ Insufficient balance! You need ${price} TK to buy an account. Your balance is ${user.balance} TK. Please Deposit.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
-    }
-
-    const account = await db.getAvailableAccount();
-    if (!account) {
-        return ctx.reply('❌ Sorry, no accounts are currently available in stock. Please try again later.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
-    }
-
-    // Deduct balance and assign account
-    await db.updateUserBalance(ctx.from.id, user.balance - price);
-    await db.markAccountAsSold(account.id, ctx.from.id);
-
-    const successMsg = `🎉 **Account Purchased Successfully!**\n\n📧 Email: \`${account.email}\`\n🔑 Password: \`${account.password}\`\n\n📌 **Instructions:** Please connect to a UK VPN, create a new UK payment profile, and then create your Paysafe account.`;
+    const balance = parseFloat(user.balance);
     
-    ctx.replyWithAnimation('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe_card_animation_successful_202606122046.mp4', {
-        caption: successMsg,
-        parse_mode: 'Markdown'
-    }).catch(() => {
-        ctx.reply(successMsg, { parse_mode: 'Markdown' });
-    });
+    const { msg, kb } = getPurchaseMessageAndKeyboard(1, price, balance);
+    
+    ctx.replyWithPhoto('https://mms.businesswire.com/media/20240205162279/en/2021326/22/Paysafe_2024_Logo.jpg', { caption: msg, parse_mode: 'Markdown', ...kb });
 });
+
+bot.action(/^qty_(add|sub)_(\d+)$/, async (ctx) => {
+    const action = ctx.match[1];
+    let qty = parseInt(ctx.match[2]);
+    
+    if (action === 'add') qty++;
+    if (action === 'sub' && qty > 1) qty--;
+    
+    const settings = await db.getSettings();
+    const user = await db.getUser(ctx.from.id);
+    const price = parseFloat(settings.account_price);
+    const balance = parseFloat(user.balance);
+    
+    const { msg, kb } = getPurchaseMessageAndKeyboard(qty, price, balance);
+    
+    ctx.editMessageCaption(msg, { parse_mode: 'Markdown', ...kb }).catch(() => {});
+    ctx.answerCbQuery();
+});
+
+bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
+    if (ctx.session?.isBuying) return ctx.answerCbQuery('Processing previous purchase... Please wait.', { show_alert: true });
+    
+    ctx.session.isBuying = true;
+    
+    try {
+        const qty = parseInt(ctx.match[1]);
+        const user = await db.getUser(ctx.from.id);
+        const settings = await db.getSettings();
+        const price = parseFloat(settings.account_price);
+        const totalCost = price * qty;
+
+        if (parseFloat(user.balance) < totalCost) {
+            ctx.session.isBuying = false;
+            return ctx.reply(`❌ Insufficient balance! You need ${totalCost} TK to buy ${qty} accounts. Your balance is ${user.balance} TK.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
+        }
+
+        const accounts = await db.getMultipleAvailableAccounts(qty);
+        if (!accounts || accounts.length < qty) {
+            ctx.session.isBuying = false;
+            return ctx.reply(`❌ Sorry, we only have ${accounts ? accounts.length : 0} accounts left in stock. Please reduce your quantity.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
+        }
+
+        // Lock funds and accounts
+        const accountIds = accounts.map(a => a.id);
+        await db.markMultipleAccountsAsSold(accountIds, ctx.from.id);
+        await db.updateUserBalance(ctx.from.id, user.balance - totalCost);
+
+        // Prepare success message
+        let successMsg = `🎉 **Successfully Purchased ${qty} Accounts!**\n\n`;
+        accounts.forEach((acc, i) => {
+            successMsg += `**Account ${i+1}:**\n📧 Email: \`${acc.email}\`\n🔑 Password: \`${acc.password}\`\n\n`;
+        });
+        successMsg += `📌 **Instructions:** Please connect to a UK VPN, create a new UK payment profile, and then create your Paysafe account.`;
+
+        ctx.replyWithAnimation('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe_card_animation_successful_202606122046.mp4', {
+            caption: successMsg,
+            parse_mode: 'Markdown'
+        }).catch(() => {
+            ctx.reply(successMsg, { parse_mode: 'Markdown' });
+        });
+        
+        ctx.answerCbQuery('Purchase successful!', { show_alert: true });
+    } catch (e) {
+        console.error('Purchase error:', e);
+        ctx.answerCbQuery('An error occurred during purchase.', { show_alert: true });
+    } finally {
+        ctx.session.isBuying = false;
+    }
+});
+
 
 // Deposit Flow
 bot.hears('💰 Deposit', (ctx) => {

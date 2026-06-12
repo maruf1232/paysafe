@@ -39,8 +39,17 @@ async function getAvailableAccount() {
     return data;
 }
 
+async function getMultipleAvailableAccounts(limit) {
+    const { data, error } = await supabase.from('accounts').select('*').eq('is_sold', false).limit(limit);
+    return data;
+}
+
 async function markAccountAsSold(accountId, buyerId) {
     await supabase.from('accounts').update({ is_sold: true, sold_to: buyerId, sold_at: new Date() }).eq('id', accountId);
+}
+
+async function markMultipleAccountsAsSold(accountIds, buyerId) {
+    await supabase.from('accounts').update({ is_sold: true, sold_to: buyerId, sold_at: new Date() }).in('id', accountIds);
 }
 
 async function addAccount(email, password) {
@@ -114,7 +123,9 @@ module.exports = {
     getSettings,
     updateSetting,
     getAvailableAccount,
+    getMultipleAvailableAccounts,
     markAccountAsSold,
+    markMultipleAccountsAsSold,
     addAccount,
     saveTransaction,
     getPendingTransaction,
