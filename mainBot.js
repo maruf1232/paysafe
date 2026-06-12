@@ -80,20 +80,26 @@ bot.action('reveal_details', async (ctx) => {
     const price = parseFloat(settings.account_price);
 
     if (parseFloat(user.balance) < price) {
-        return ctx.reply(`❌ Insufficient balance! You need ${price} TK to buy an account. Your balance is ${user.balance} TK. Please Deposit.`);
+        return ctx.reply(`❌ Insufficient balance! You need ${price} TK to buy an account. Your balance is ${user.balance} TK. Please Deposit.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
     }
 
     const account = await db.getAvailableAccount();
     if (!account) {
-        return ctx.reply('❌ Sorry, no accounts are currently available in stock. Please try again later.');
+        return ctx.reply('❌ Sorry, no accounts are currently available in stock. Please try again later.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
     }
 
     // Deduct balance and assign account
-    await db.updateUserBalance(ctx.from.id, -price);
+    await db.updateUserBalance(ctx.from.id, user.balance - price);
     await db.markAccountAsSold(account.id, ctx.from.id);
 
-    const msg = `✅ **Account Purchase Successful!**\n\n📧 Email: \`${account.email}\`\n🔑 Password: \`${account.password}\`\n\n**Instructions:**\n1. Connect a UK VPN.\n2. Create a new UK payment profile.\n3. Create your Paysafe account using these details.`;
-    ctx.reply(msg, { parse_mode: 'Markdown' });
+    const successMsg = `🎉 **Account Purchased Successfully!**\n\n📧 Email: \`${account.email}\`\n🔑 Password: \`${account.password}\`\n\n📌 **Instructions:** Please connect to a UK VPN, create a new UK payment profile, and then create your Paysafe account.`;
+    
+    ctx.replyWithAnimation('https://media.giphy.com/media/xT0xezQGU5xCDJuCPe/giphy.gif', {
+        caption: successMsg,
+        parse_mode: 'Markdown'
+    }).catch(() => {
+        ctx.reply(successMsg, { parse_mode: 'Markdown' });
+    });
 });
 
 // Deposit Flow
@@ -110,8 +116,8 @@ bot.on('text', async (ctx, next) => {
     
     if (state === 'DEPOSIT_AMOUNT') {
         const amount = parseFloat(ctx.message.text);
-        if (isNaN(amount) || amount <= 0) {
-            return ctx.reply('Please enter a valid amount.');
+        if (isNaN(amount) || amount < 20) {
+            return ctx.reply('❌ Minimum deposit is 20 TK. Please enter a valid amount:').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
         }
         ctx.session.depositAmount = amount;
         ctx.session.state = null;
@@ -136,9 +142,9 @@ bot.on('text', async (ctx, next) => {
         
         if (error) {
             if (error.code === '23505' || (error.message && error.message.includes('unique'))) {
-                return ctx.reply('❌ This Transaction ID has already been used by someone!', { parse_mode: 'Markdown' });
+                return ctx.reply('❌ This Transaction ID has already been used by someone!', { parse_mode: 'Markdown' }).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
             }
-            return ctx.reply('❌ An error occurred while processing your transaction. Please try again.');
+            return ctx.reply('❌ An error occurred while processing your transaction. Please try again.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
         }
 
         ctx.reply(`⏳ Your TrxID \`${trxId}\` for ${amount} TK has been recorded. It will be automatically verified shortly.`, { parse_mode: 'Markdown' });
