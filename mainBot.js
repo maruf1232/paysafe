@@ -118,15 +118,21 @@ bot.on('text', async (ctx, next) => {
     
     if (state === 'DEPOSIT_TRXID') {
         const trxId = ctx.message.text.trim();
+        
+        // Allow user to cancel by clicking a menu button or sending a command
+        if (trxId === '💰 Deposit' || trxId === '💳 Paysafe' || trxId === '👤 Profile' || trxId === '🎁 Refer' || trxId === '❓ Help' || trxId.startsWith('/')) {
+            ctx.session.state = null;
+            ctx.session.depositMethod = null;
+            return next();
+        }
+
         const method = ctx.session.depositMethod || 'unknown';
-        
-        ctx.session.state = null;
-        ctx.session.depositMethod = null;
-        
-        // Check if TrxID exists in channel_transactions
         const channelTx = await db.getChannelTransaction(trxId);
         
         if (channelTx) {
+            ctx.session.state = null;
+            ctx.session.depositMethod = null;
+            
             if (channelTx.is_used) {
                 return ctx.reply('❌ This Transaction ID has already been used by someone!').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
             }
@@ -173,7 +179,7 @@ bot.on('text', async (ctx, next) => {
             
             return ctx.reply(`✅ Your deposit of ${channelTx.amount} TK (TrxID: ${trxId}) has been verified and added to your balance!`);
         } else {
-            return ctx.reply('⏳ Transaction not found in our system yet. If you just sent money, please wait 1-2 minutes and send the TrxID again.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 8000));
+            return ctx.reply('⏳ **Transaction not found in our system yet.**\n\n📌 *Make sure you are ONLY sending the TrxID (e.g. 9A2B3C4D5E).*\n\nIf you just sent money, please wait 1-2 minutes and send the TrxID again.', { parse_mode: 'Markdown' });
         }
     }
     
