@@ -222,10 +222,34 @@ bot.on('message', async (ctx, next) => {
         if (ctx.message.photo && ctx.message.photo.length > 0) {
             const photoArray = ctx.message.photo;
             const photoId = photoArray[photoArray.length - 1].file_id;
-            if (ctx.session.broadcastDraft) {
-                ctx.session.broadcastDraft.photo = photoId;
-                ctx.session.state = null;
-                return sendBroadcastDraftPreview(ctx);
+            
+            ctx.reply('☁️ Uploading image to Supabase...');
+            try {
+                const link = await ctx.telegram.getFileLink(photoId);
+                const res = await fetch(link.href);
+                const buffer = await res.arrayBuffer();
+                const fileName = `broadcast_${Date.now()}.jpg`;
+                
+                const db = require('./db');
+                const { error } = await db.supabase.storage.from('image').upload(fileName, buffer, {
+                    contentType: 'image/jpeg'
+                });
+                
+                if (error) {
+                    console.error('Supabase upload error:', error);
+                    return ctx.reply('Failed to upload image to Supabase Bucket. Make sure bucket named "image" is created and public.');
+                }
+                
+                const { data: publicData } = db.supabase.storage.from('image').getPublicUrl(fileName);
+                
+                if (ctx.session.broadcastDraft) {
+                    ctx.session.broadcastDraft.photo = publicData.publicUrl;
+                    ctx.session.state = null;
+                    return sendBroadcastDraftPreview(ctx);
+                }
+            } catch (err) {
+                console.error(err);
+                return ctx.reply('Failed to upload image.');
             }
         } else {
             return ctx.reply('Please send a valid photo/image.');
