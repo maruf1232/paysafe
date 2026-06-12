@@ -127,7 +127,15 @@ bot.on('text', async (ctx, next) => {
         ctx.session.depositMethod = null;
         
         // Save as pending transaction
-        await db.saveTransaction(trxId, amount, ctx.from.id, method);
+        const { data, error } = await db.saveTransaction(trxId, amount, ctx.from.id, method);
+        
+        if (error) {
+            if (error.code === '23505' || (error.message && error.message.includes('unique'))) {
+                return ctx.reply('❌ This Transaction ID has already been used by someone!', { parse_mode: 'Markdown' });
+            }
+            return ctx.reply('❌ An error occurred while processing your transaction. Please try again.');
+        }
+
         ctx.reply(`⏳ Your TrxID \`${trxId}\` for ${amount} TK has been recorded. It will be automatically verified shortly.`, { parse_mode: 'Markdown' });
         
         // Immediately try to verify in case the channel message already arrived

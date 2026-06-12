@@ -16,19 +16,17 @@ app.listen(PORT, async () => {
     console.log(`Web server is listening on port ${PORT}`);
     
     // Launch bots
-    try {
-        await mainBot.launch();
+    mainBot.launch().then(() => {
         console.log('Main Bot is running.');
-    } catch (e) {
+    }).catch(e => {
         console.error('Failed to launch Main Bot:', e);
-    }
+    });
     
-    try {
-        await adminBot.launch();
+    adminBot.launch().then(() => {
         console.log('Admin Bot is running.');
-    } catch (e) {
+    }).catch(e => {
         console.error('Failed to launch Admin Bot:', e);
-    }
+    });
 });
 
 // Enable graceful stop
