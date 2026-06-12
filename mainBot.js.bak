@@ -104,10 +104,8 @@ bot.action('reveal_details', async (ctx) => {
 
 // Deposit Flow
 bot.hears('💰 Deposit', (ctx) => {
-    const kb = Markup.inlineKeyboard([
-        [Markup.button.callback('bKash', 'dep_bkash'), Markup.button.callback('Nagad', 'dep_nagad')]
-    ]);
-    return ctx.reply('Select your payment method:', kb);
+    ctx.session.state = 'DEPOSIT_AMOUNT';
+    ctx.reply('Enter the amount you want to deposit (in TK):');
 });
 
 bot.on('text', async (ctx, next) => {
@@ -116,65 +114,44 @@ bot.on('text', async (ctx, next) => {
 
     const state = ctx.session?.state;
     
+    if (state === 'DEPOSIT_AMOUNT') {
+        const amount = parseFloat(ctx.message.text);
+        if (isNaN(amount) || amount < 20) {
+            return ctx.reply('❌ Minimum deposit is 20 TK. Please enter a valid amount:').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
+        }
+        ctx.session.depositAmount = amount;
+        ctx.session.state = null;
+        
+        const kb = Markup.inlineKeyboard([
+            [Markup.button.callback('bKash', 'dep_bkash'), Markup.button.callback('Nagad', 'dep_nagad')]
+        ]);
+        return ctx.reply('Select your payment method:', kb);
+    }
+    
     if (state === 'DEPOSIT_TRXID') {
         const trxId = ctx.message.text.trim();
-        const method = ctx.session.depositMethod || 'unknown';
+        const amount = ctx.session.depositAmount;
+        const method = ctx.session.depositMethod;
         
         ctx.session.state = null;
+        ctx.session.depositAmount = null;
         ctx.session.depositMethod = null;
         
-        // Check if TrxID exists in channel_transactions
-        const channelTx = await db.getChannelTransaction(trxId);
+        // Save as pending transaction
+        const { data, error } = await db.saveTransaction(trxId, amount, ctx.from.id, method);
         
-        if (channelTx) {
-            if (channelTx.is_used) {
-                return ctx.reply('❌ This Transaction ID has already been used by someone!').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
+        if (error) {
+            if (error.code === '23505' || (error.message && error.message.includes('unique'))) {
+                return ctx.reply('❌ This Transaction ID has already been used by someone!', { parse_mode: 'Markdown' }).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
             }
-            
-            // Mark as used
-            await db.markChannelTransactionAsUsed(trxId);
-            
-            // Save to main transactions table
-            await db.saveTransaction(trxId, channelTx.amount, ctx.from.id, method);
-            await db.verifyTransaction(trxId);
-            await db.updateUserBalance(ctx.from.id, channelTx.amount);
-            
-            // Handle Referral Bonus
-            const user = await db.getUser(ctx.from.id);
-            if (user && user.referred_by && !user.has_deposited) {
-                const referrer = await db.getUser(user.referred_by);
-                if (referrer) {
-                    const settings = await db.getSettings();
-                    const totalRefs = referrer.total_referrals;
-                    
-                    let bonus = 0;
-                    if (totalRefs < 10) {
-                        bonus = parseFloat(channelTx.amount) * (parseFloat(settings.referral_percentage) / 100);
-                    } else {
-                        bonus = parseFloat(settings.referral_fixed_bonus);
-                    }
-                    
-                    if (bonus > 0) {
-                        await db.updateUserBalance(referrer.telegram_id, bonus);
-                        try {
-                            await ctx.telegram.sendMessage(referrer.telegram_id, `🎁 You received a referral bonus of ${bonus.toFixed(2)} TK from a new user's deposit!`);
-                        } catch(e) {}
-                    }
-                    
-                    // Update referrer ref count
-                    const { supabase } = require('./db');
-                    await supabase.from('users').update({ total_referrals: totalRefs + 1 }).eq('telegram_id', referrer.telegram_id);
-                }
-                
-                // Mark user as deposited
-                const { supabase } = require('./db');
-                await supabase.from('users').update({ has_deposited: true }).eq('telegram_id', ctx.from.id);
-            }
-            
-            return ctx.reply(`✅ Your deposit of ${channelTx.amount} TK (TrxID: ${trxId}) has been verified and added to your balance!`);
-        } else {
-            return ctx.reply('⏳ Transaction not found in our system yet. If you just sent money, please wait 1-2 minutes and send the TrxID again.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 8000));
+            return ctx.reply('❌ An error occurred while processing your transaction. Please try again.').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
         }
+
+        ctx.reply(`⏳ Your TrxID \`${trxId}\` for ${amount} TK has been recorded. It will be automatically verified shortly.`, { parse_mode: 'Markdown' });
+        
+        // Immediately try to verify in case the channel message already arrived
+        await verifyAndProcessTransaction(trxId, ctx.telegram);
+        return;
     }
     
     return next();
@@ -194,51 +171,83 @@ bot.action('dep_nagad', (ctx) => {
 
 // Auto verification listener
 bot.on('channel_post', async (ctx) => {
-    const ADMIN_CHANNEL_ID = process.env.ADMIN_CHANNEL_ID || '-1003838765118';
     if (ctx.chat.id.toString() !== ADMIN_CHANNEL_ID) return;
     
     const text = ctx.channelPost.text || '';
     
-    const trxMatch = text.match(/\b([A-Z0-9]{8,12})\b/);
-    const amtMatch = text.match(/(?:Tk|BDT|Amount|৳)\s*[:.-]?\s*([\d,]+(?:\.\d+)?)/i);
-    
-    if (trxMatch && amtMatch) {
-        const trxId = trxMatch[1];
-        const amountStr = amtMatch[1].replace(/,/g, '');
-        const amount = parseFloat(amountStr);
-        
-        if (!isNaN(amount) && amount > 0) {
-            await db.saveChannelTransaction(trxId, amount);
+    // Very basic TrxID extraction. It assumes an 8-10 alphanumeric string.
+    // E.g. "TrxID 9A2B3C4D5E" or similar
+    const match = text.match(/\b([A-Z0-9]{8,10})\b/g);
+    if (match && match.length > 0) {
+        for (let trxId of match) {
+            // Check if there is any pending transaction with this TrxID
+            await verifyAndProcessTransaction(trxId, ctx.telegram);
         }
     }
 });
 
-// Attach a method to broadcast
-process.sendBroadcast = async (text, photoFileId) => {
-    console.log('Starting broadcast...');
-    const userIds = await require('./db').getAllUserIds();
-    let success = 0;
-    let fail = 0;
-    
-    for (const uid of userIds) {
+async function verifyAndProcessTransaction(trxId, telegramApp) {
+    const pendingTx = await db.getPendingTransaction(trxId);
+    if (pendingTx) {
+        await db.verifyTransaction(trxId);
+        await db.updateUserBalance(pendingTx.user_id, pendingTx.amount);
+        
         try {
-            if (photoFileId) {
-                await bot.telegram.sendPhoto(uid, photoFileId, { caption: text, parse_mode: 'Markdown' });
-            } else {
-                await bot.telegram.sendMessage(uid, text, { parse_mode: 'Markdown' });
+            await telegramApp.sendMessage(pendingTx.user_id, `✅ Your deposit of ${pendingTx.amount} TK (TrxID: ${trxId}) has been verified and added to your balance!`);
+        } catch(e) { console.log('Could not message user', e); }
+
+        // Process referral logic
+        const user = await db.getUser(pendingTx.user_id);
+        if (user && user.referred_by && !user.has_deposited) {
+            const referrer = await db.getUser(user.referred_by);
+            if (referrer) {
+                const settings = await db.getSettings();
+                const totalRefs = referrer.total_referrals;
+                
+                let bonus = 0;
+                if (totalRefs < 10) {
+                    bonus = parseFloat(pendingTx.amount) * (parseFloat(settings.referral_percentage) / 100);
+                } else {
+                    bonus = parseFloat(settings.referral_fixed_bonus);
+                }
+                
+                if (bonus > 0) {
+                    await db.updateUserBalance(referrer.telegram_id, bonus);
+                    try {
+                        await telegramApp.sendMessage(referrer.telegram_id, `🎉 You received a referral bonus of ${bonus.toFixed(2)} TK from a new user's deposit!`);
+                    } catch(e) {}
+                }
+                
+                // Update referrer ref count
+                const { supabase } = require('./db');
+                await supabase.from('users').update({ total_referrals: totalRefs + 1 }).eq('telegram_id', referrer.telegram_id);
             }
-            success++;
-        } catch (e) {
-            fail++;
+            
+            // Mark user as deposited
+            const { supabase } = require('./db');
+            await supabase.from('users').update({ has_deposited: true }).eq('telegram_id', pendingTx.user_id);
         }
-        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay to avoid rate limits
     }
-    
-    console.log(`Broadcast finished. Success: ${success}, Fail: ${fail}`);
-    // Optionally notify the admin channel or specific admin
-    try {
-        await bot.telegram.sendMessage(process.env.ADMIN_CHANNEL_ID || '-1003838765118', `📢 Broadcast Report:\n✅ Success: ${success}\n❌ Failed: ${fail}`);
-    } catch(e) {}
+}
+
+// Attach a method to broadcast
+process.sendBroadcast = async (message) => {
+    const { supabase } = require('./db');
+    const { data: users } = await supabase.from('users').select('telegram_id');
+    if (users) {
+        let count = 0;
+        for (let u of users) {
+            try {
+                await bot.telegram.sendMessage(u.telegram_id, `📢 **Broadcast Message**\n\n${message}`, { parse_mode: 'Markdown' });
+                count++;
+            } catch (e) {
+                // User might have blocked the bot
+            }
+            // Add slight delay to avoid rate limit
+            await new Promise(r => setTimeout(r, 50));
+        }
+        console.log(`Broadcast completed to ${count} users.`);
+    }
 };
 
 module.exports = bot;

@@ -90,6 +90,23 @@ async function getAllUserIds() {
     return data ? data.map(u => u.telegram_id) : [];
 }
 
+async function saveChannelTransaction(trxId, amount) {
+    const { data, error } = await supabase.from('channel_transactions').insert([{ trx_id: trxId, amount }]).select().single();
+    if (error && error.code !== '23505') console.error('Error saving channel trx:', error);
+    return { data, error };
+}
+
+async function getChannelTransaction(trxId) {
+    const { data, error } = await supabase.from('channel_transactions').select('*').eq('trx_id', trxId).single();
+    if (error && error.code !== 'PGRST116') console.error('Error fetching channel trx:', error);
+    return data;
+}
+
+async function markChannelTransactionAsUsed(trxId) {
+    const { error } = await supabase.from('channel_transactions').update({ is_used: true }).eq('trx_id', trxId);
+    if (error) console.error('Error marking channel trx as used:', error);
+}
+
 module.exports = {
     getUser,
     createUser,
@@ -107,5 +124,8 @@ module.exports = {
     getTotalAccountsCount,
     getAvailableAccountsCount,
     getAllUserIds,
+    saveChannelTransaction,
+    getChannelTransaction,
+    markChannelTransactionAsUsed,
     supabase
 };
