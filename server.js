@@ -12,6 +12,33 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+process.sendBroadcast = async (text, photoFileId) => {
+    console.log('Starting broadcast...');
+    const userIds = await require('./db').getAllUserIds();
+    let success = 0;
+    let fail = 0;
+    
+    for (const uid of userIds) {
+        try {
+            if (photoFileId) {
+                await mainBot.telegram.sendPhoto(uid, photoFileId, { caption: text, parse_mode: 'Markdown' });
+            } else {
+                await mainBot.telegram.sendMessage(uid, text, { parse_mode: 'Markdown' });
+            }
+            success++;
+        } catch (e) {
+            fail++;
+        }
+        await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay to avoid rate limits
+    }
+    
+    console.log(`Broadcast finished. Success: ${success}, Fail: ${fail}`);
+    // Optionally notify the admin channel or specific admin
+    try {
+        await adminBot.telegram.sendMessage(process.env.ADMIN_CHANNEL_ID || '-1003838765118', `📢 Broadcast Report:\n✅ Success: ${success}\n❌ Failed: ${fail}`);
+    } catch(e) {}
+};
+
 app.listen(PORT, async () => {
     console.log(`Web server is listening on port ${PORT}`);
     
