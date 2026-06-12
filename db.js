@@ -54,6 +54,17 @@ async function saveTransaction(trxId, amount, userId, method) {
     return { data, error };
 }
 
+async function getPendingTransaction(trxId) {
+    const { data, error } = await supabase.from('transactions').select('*').eq('trx_id', trxId).eq('status', 'pending').single();
+    if (error && error.code !== 'PGRST116') console.error('Error fetching pending trx:', error);
+    return data;
+}
+
+async function verifyTransaction(trxId) {
+    const { error } = await supabase.from('transactions').update({ status: 'verified', verified_at: new Date() }).eq('trx_id', trxId);
+    if (error) console.error('Error verifying trx:', error);
+}
+
 async function getReferralCount(telegramId) {
     const { count } = await supabase.from('users').select('*', { count: 'exact', head: true }).eq('referred_by', telegramId);
     return count || 0;
@@ -89,9 +100,12 @@ module.exports = {
     markAccountAsSold,
     addAccount,
     saveTransaction,
+    getPendingTransaction,
+    verifyTransaction,
     getReferralCount,
     getTotalUsersCount,
     getTotalAccountsCount,
     getAvailableAccountsCount,
-    getAllUserIds
+    getAllUserIds,
+    supabase
 };
