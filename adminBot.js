@@ -30,7 +30,7 @@ const BROADCAST_TEMPLATES = {
 
 function getAdminKeyboard() {
     return Markup.keyboard([
-        ['💰 Change Price', '➕ Add Account'],
+        ['💰 Change Price', '🔄 Checking'],
         ['👥 User Stats', '📊 Account Stats'],
         ['🔗 Ref Settings', '📢 Broadcast', '📝 Templates']
     ]).resize();
@@ -57,11 +57,19 @@ bot.hears('💰 Change Price', async (ctx) => {
     ctx.reply(`Current price is: ${settings.account_price} TK.\nEnter new price:`, Markup.removeKeyboard());
 });
 
-bot.hears('➕ Add Account', (ctx) => {
+bot.hears('🔄 Checking', async (ctx) => {
     if (!authedUsers.has(ctx.from.id)) return;
-    ctx.session.state = 'WAITING_FOR_ACCOUNT';
-    const msg = `Send the accounts in this format:\n\n\`email=password,email2=password\`\n\nExample:\n\`maruf@gmail.com=Maruf1232,sakib@gmail.com=Sakib1233\``;
-    ctx.reply(msg, { parse_mode: 'HTML', ...Markup.removeKeyboard() });
+    const sheets = require('./googleSheets');
+    try {
+        const count = await sheets.countAvailableStock();
+        if (count > 0) {
+            ctx.reply(`✅ Thanks! New accounts have been detected. \nAvailable Stock: ${count}`, getAdminKeyboard());
+        } else {
+            ctx.reply(`⚠️ Account stock is still empty! Please add more accounts to the Google Sheet and make sure the checkboxes are empty.`, getAdminKeyboard());
+        }
+    } catch (e) {
+        ctx.reply(`Error checking Google Sheet: ${e.message}`, getAdminKeyboard());
+    }
 });
 
 bot.hears('👥 User Stats', async (ctx) => {
@@ -72,9 +80,13 @@ bot.hears('👥 User Stats', async (ctx) => {
 
 bot.hears('📊 Account Stats', async (ctx) => {
     if (!authedUsers.has(ctx.from.id)) return;
-    const total = await db.getTotalAccountsCount();
-    const available = await db.getAvailableAccountsCount();
-    ctx.reply(`Accounts Stats:\nTotal Added: ${total}\nAvailable: ${available}\nSold: ${total - available}`, getAdminKeyboard());
+    const sheets = require('./googleSheets');
+    try {
+        const count = await sheets.countAvailableStock();
+        ctx.reply(`📊 Accounts Stats:\nAvailable in Google Sheet: ${count}`, getAdminKeyboard());
+    } catch (e) {
+        ctx.reply(`Error reading stats: ${e.message}`, getAdminKeyboard());
+    }
 });
 
 bot.hears('🔗 Ref Settings', async (ctx) => {
@@ -285,32 +297,7 @@ bot.on('message', async (ctx, next) => {
         }
     }
 
-    if (state === 'WAITING_FOR_ACCOUNT' && ctx.message.text) {
-        const text = ctx.message.text;
-        // Format: email=password,email2=password
-        const accountsStr = text.split(',');
-        let addedCount = 0;
-        
-        for (let acc of accountsStr) {
-            if (acc.includes('=')) {
-                const parts = acc.split('=');
-                const email = parts[0].trim();
-                const password = parts.slice(1).join('=').trim(); // in case password has =
-                
-                if (email && password) {
-                    await db.addAccount(email, password);
-                    addedCount++;
-                }
-            }
-        }
 
-        ctx.session.state = null;
-        if (addedCount > 0) {
-            return ctx.reply(`Successfully added ${addedCount} account(s)!`, getAdminKeyboard());
-        } else {
-            return ctx.reply('Invalid format or no accounts found. Try again via "Add Account" button.', getAdminKeyboard());
-        }
-    }
 
     if (state === 'WAITING_FOR_BROADCAST' && ctx.message.text) {
         const msg = ctx.message.text;
