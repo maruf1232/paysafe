@@ -74,10 +74,10 @@ function getPurchaseMessageAndKeyboard(qty, price, balance) {
     // Right side: ➖ (if qty > 1) and ➕
     const buttons = [];
     if (qty > 1) {
-        buttons.push(Markup.button.callback('➖', `qty_sub_${qty}`));
+        buttons.push(Markup.button.callback('➖ Less', `qty_sub_${qty}`));
     }
-    buttons.push(Markup.button.callback(`Buy - ${qty}`, `buy_qty_${qty}`));
-    buttons.push(Markup.button.callback('➕', `qty_add_${qty}`));
+    buttons.push(Markup.button.callback(`🛒 Buy (${qty})`, `buy_qty_${qty}`));
+    buttons.push(Markup.button.callback('➕ More', `qty_add_${qty}`));
     
     const kb = Markup.inlineKeyboard([buttons]);
     return { msg, kb };
