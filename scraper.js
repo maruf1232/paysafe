@@ -9,27 +9,31 @@ async function scrapeOTP(url) {
         });
         const page = await browser.newPage();
         
-        // Go to Quackr URL
         await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
         
-        // Wait up to 10 seconds for the message table to appear (sometimes requires scrolling or waiting)
-        await new Promise(r => setTimeout(r, 8000)); 
-        
-        // Extract messages
-        const text = await page.evaluate(() => {
-            const elements = document.querySelectorAll('td, div, p, span');
-            for (let el of elements) {
-                const t = el.innerText.trim();
-                // Check if the text has both "paysafe" and looks like an OTP
-                if (t.toLowerCase().includes('paysafe')) {
-                    // Usually an OTP message is something like "Your Paysafe verification code is 123456"
-                    return t; // Return the first matching message
+        // Poll every 5 seconds for up to 2 minutes (24 times)
+        for (let i = 0; i < 24; i++) {
+            await new Promise(r => setTimeout(r, 5000));
+            // reload page to get new messages
+            await page.reload({ waitUntil: 'networkidle2' }).catch(() => {});
+            
+            const text = await page.evaluate(() => {
+                const elements = document.querySelectorAll('td, div, p, span');
+                for (let el of elements) {
+                    const t = el.innerText.trim();
+                    if (t.toLowerCase().includes('paysafe')) {
+                        return t;
+                    }
                 }
+                return null;
+            });
+            
+            if (text) {
+                return text;
             }
-            return null;
-        });
+        }
         
-        return text;
+        return null;
     } catch (e) {
         console.error('Scraping error:', e.message);
         return null;

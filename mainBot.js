@@ -124,16 +124,23 @@ bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
         otpSessions.set(ctx.from.id, { account, attempts: 0 });
         
         const msg = `✅ **Purchase Successful!**\n\n` +
-                    `📧 **Email:** \`${account.email}\`\n` +
-                    `🔑 **Password:** \`${account.password}\`\n` +
-                    `📱 **Phone No:** \`${account.phoneNo}\`\n\n` +
-                    `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money to these accounts!*`;
+                    `> 📧 **Email:** \`${account.email}\`\n` +
+                    `> 🔑 **Password:** ||${account.password}||\n` +
+                    `> 📱 **Phone No:** \`${account.phoneNo}\`\n\n` +
+                    `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money!*`;
         
         const kb = Markup.inlineKeyboard([
             [Markup.button.callback('📩 Get OTP', 'get_otp')]
         ]);
         
-        await ctx.editMessageCaption(msg, { parse_mode: 'Markdown', ...kb });
+        // Edit media to show the success image
+        await ctx.editMessageMedia({
+            type: 'photo',
+            media: 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png',
+            caption: msg,
+            parse_mode: 'MarkdownV2'
+        }, { reply_markup: kb.reply_markup });
+        
         await ctx.answerCbQuery('✅ Account purchased!');
     } catch (e) {
         console.error(e);
@@ -153,23 +160,24 @@ bot.action('get_otp', async (ctx) => {
         session.attempts += 1;
         
         await ctx.answerCbQuery('⏳ Please wait up to 2 minutes...', { show_alert: true });
-        const waitMsg = await ctx.reply('⏳ Please wait up to 2 minutes while I fetch your OTP from the server...');
+        const waitMsg = await ctx.reply('⏳ Please wait up to 2 minutes while I actively scan for your OTP...');
         
-        // Start scraping
+        // Start scraping (now checks for up to 2 mins)
         const msgText = await scraper.scrapeOTP(session.account.otpLink);
         
         if (msgText) {
             // Success
-            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
-            await ctx.reply(`✅ **OTP Found!**\n\n\`${msgText}\``, { parse_mode: 'Markdown' });
+            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(()=>{});
+            await ctx.reply(`✅ **OTP Found!**\n\n> \`${msgText}\``, { parse_mode: 'Markdown' });
             otpSessions.delete(ctx.from.id);
         } else {
             // Failed
-            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
+            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id).catch(()=>{});
             
             if (session.attempts >= 2) {
                 // Auto replace
-                await ctx.reply('❌ OTP not received after 2 attempts. 🔄 Getting a new account for you for FREE...');
+                const failMsg = await ctx.reply('❌ OTP not received after 2 attempts. 🔄 Getting a new account for you for FREE...');
+                setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, failMsg.message_id).catch(()=> {}), 10000);
                 
                 const sheets = require('./googleSheets');
                 const newAccount = await sheets.getAvailableAccount();
@@ -181,19 +189,20 @@ bot.action('get_otp', async (ctx) => {
                 otpSessions.set(ctx.from.id, { account: newAccount, attempts: 0 });
                 
                 const newMsg = `✅ **Replacement Successful!**\n\n` +
-                               `📧 **Email:** \`${newAccount.email}\`\n` +
-                               `🔑 **Password:** \`${newAccount.password}\`\n` +
-                               `📱 **Phone No:** \`${newAccount.phoneNo}\`\n\n` +
+                               `> 📧 **Email:** \`${newAccount.email}\`\n` +
+                               `> 🔑 **Password:** ||${newAccount.password}||\n` +
+                               `> 📱 **Phone No:** \`${newAccount.phoneNo}\`\n\n` +
                                `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money!*`;
                 
                 const kb = Markup.inlineKeyboard([
                     [Markup.button.callback('📩 Get OTP', 'get_otp')]
                 ]);
                 
-                await ctx.reply(newMsg, { parse_mode: 'Markdown', ...kb });
+                await ctx.replyWithPhoto('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png', { caption: newMsg, parse_mode: 'MarkdownV2', ...kb });
                 
             } else {
-                await ctx.reply('❌ OTP not found yet. Please click "Get OTP" again after a minute.');
+                const retryMsg = await ctx.reply('❌ OTP not found after 2 minutes. Please send the OTP again from the Google page and click "Get OTP" here.');
+                setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, retryMsg.message_id).catch(()=> {}), 10000);
             }
         }
     } catch (e) {
