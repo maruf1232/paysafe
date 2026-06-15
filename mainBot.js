@@ -123,11 +123,11 @@ bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
         // Save session for OTP
         otpSessions.set(ctx.from.id, { account, attempts: 0 });
         
-        const msg = `✅ **Purchase Successful!**\n\n` +
-                    `> 📧 **Email:** \`${account.email}\`\n` +
-                    `> 🔑 **Password:** ||${account.password}||\n` +
-                    `> 📱 **Phone No:** \`${account.phoneNo}\`\n\n` +
-                    `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money!*`;
+        const msg = `✅ <b>Purchase Successful!</b>\n\n` +
+                    `<blockquote>📧 <b>Email:</b> <code>${account.email}</code>\n` +
+                    `🔑 <b>Password:</b> <tg-spoiler>${account.password}</tg-spoiler>\n` +
+                    `📱 <b>Phone No:</b> <code>${account.phoneNo}</code></blockquote>\n\n` +
+                    `⚠️ <i>These accounts are temporary and strictly for Google free trials. DO NOT add money!</i>`;
         
         const kb = Markup.inlineKeyboard([
             [Markup.button.callback('📩 Get OTP', 'get_otp')]
@@ -138,7 +138,7 @@ bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
             type: 'photo',
             media: 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png',
             caption: msg,
-            parse_mode: 'MarkdownV2'
+            parse_mode: 'HTML'
         }, { reply_markup: kb.reply_markup });
         
         await ctx.answerCbQuery('✅ Account purchased!');
@@ -188,17 +188,17 @@ bot.action('get_otp', async (ctx) => {
                 await sheets.markAccountUsed(newAccount.row);
                 otpSessions.set(ctx.from.id, { account: newAccount, attempts: 0 });
                 
-                const newMsg = `✅ **Replacement Successful!**\n\n` +
-                               `> 📧 **Email:** \`${newAccount.email}\`\n` +
-                               `> 🔑 **Password:** ||${newAccount.password}||\n` +
-                               `> 📱 **Phone No:** \`${newAccount.phoneNo}\`\n\n` +
-                               `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money!*`;
+                const newMsg = `✅ <b>Replacement Successful!</b>\n\n` +
+                               `<blockquote>📧 <b>Email:</b> <code>${newAccount.email}</code>\n` +
+                               `🔑 <b>Password:</b> <tg-spoiler>${newAccount.password}</tg-spoiler>\n` +
+                               `📱 <b>Phone No:</b> <code>${newAccount.phoneNo}</code></blockquote>\n\n` +
+                               `⚠️ <i>These accounts are temporary and strictly for Google free trials. DO NOT add money!</i>`;
                 
                 const kb = Markup.inlineKeyboard([
                     [Markup.button.callback('📩 Get OTP', 'get_otp')]
                 ]);
                 
-                await ctx.replyWithPhoto('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png', { caption: newMsg, parse_mode: 'MarkdownV2', ...kb });
+                await ctx.replyWithPhoto('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png', { caption: newMsg, parse_mode: 'HTML', ...kb });
                 
             } else {
                 const retryMsg = await ctx.reply('❌ OTP not found after 2 minutes. Please send the OTP again from the Google page and click "Get OTP" here.');
