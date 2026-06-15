@@ -2,7 +2,7 @@ const { Telegraf, Markup } = require('telegraf');
 const LocalSession = require('telegraf-session-local');
 const db = require('./db');
 
-const bot = new Telegraf(process.env.MAIN_BOT_TOKEN);
+const bot = new Telegraf(process.env.MAIN_BOT_TOKEN, { handlerTimeout: 300000 });
 const localSession = new LocalSession({ database: 'main_session_db.json' });
 bot.use(localSession.middleware());
 
