@@ -63,23 +63,14 @@ bot.hears('❓ Help', (ctx) => {
     ctx.reply(msg, { parse_mode: 'Markdown' });
 });
 
-function getPurchaseMessageAndKeyboard(qty, price, balance) {
-    const totalCost = qty * price;
-    const remaining = balance - totalCost;
+function getPurchaseMessageAndKeyboard(price, balance) {
+    const remaining = balance - price;
     
-    const msg = `💳 **Paysafe Account Purchase**\n\nPrice per account: ${price} TK\n\n🛒 **Purchase Summary**\nQuantity: ${qty}\nTotal Cost: ${totalCost} TK\nYour Balance: ${balance} TK\nAfter Purchase: ${remaining} TK`;
+    const msg = `💳 **Paysafe Account Purchase**\n\nPrice per account: ${price} TK\n\n🛒 **Purchase Summary**\nQuantity: 1\nTotal Cost: ${price} TK\nYour Balance: ${balance} TK\nAfter Purchase: ${remaining} TK`;
     
-    // Keyboard logic:
-    // Left side: Buy - X
-    // Right side: ➖ (if qty > 1) and ➕
-    const buttons = [];
-    if (qty > 1) {
-        buttons.push(Markup.button.callback('➖ Less', `qty_sub_${qty}`));
-    }
-    buttons.push(Markup.button.callback(`🛒 Buy (${qty})`, `buy_qty_${qty}`));
-    buttons.push(Markup.button.callback('➕ More', `qty_add_${qty}`));
-    
-    const kb = Markup.inlineKeyboard([buttons]);
+    const kb = Markup.inlineKeyboard([
+        [Markup.button.callback(`🛒 Buy (1)`, `buy_qty_1`)]
+    ]);
     return { msg, kb };
 }
 
@@ -89,164 +80,128 @@ bot.hears('💳 Paysafe', async (ctx) => {
     const price = parseFloat(settings.account_price);
     const balance = parseFloat(user.balance);
     
-    const { msg, kb } = getPurchaseMessageAndKeyboard(1, price, balance);
+    const { msg, kb } = getPurchaseMessageAndKeyboard(price, balance);
     
     ctx.replyWithPhoto('https://mms.businesswire.com/media/20240205162279/en/2021326/22/Paysafe_2024_Logo.jpg', { caption: msg, parse_mode: 'Markdown', ...kb });
 });
 
-bot.action(/^qty_(add|sub)_(\d+)$/, async (ctx) => {
-    const action = ctx.match[1];
-    let qty = parseInt(ctx.match[2]);
-    
-    if (action === 'add') qty++;
-    if (action === 'sub' && qty > 1) qty--;
-    
-    const settings = await db.getSettings();
-    const user = await db.getUser(ctx.from.id);
-    const price = parseFloat(settings.account_price);
-    const balance = parseFloat(user.balance);
-    
-    const { msg, kb } = getPurchaseMessageAndKeyboard(qty, price, balance);
-    
-    ctx.editMessageCaption(msg, { parse_mode: 'Markdown', ...kb }).catch(() => {});
-    ctx.answerCbQuery();
-});
+
+// OTP Tracking Map: { userId: { account: Object, attempts: number } }
+const otpSessions = new Map();
 
 bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
-    if (ctx.session?.isBuying) return ctx.answerCbQuery('Processing previous purchase... Please wait.', { show_alert: true });
-    
-    ctx.session.isBuying = true;
-    
     try {
         const qty = parseInt(ctx.match[1]);
+        if (qty > 1) {
+            return ctx.answerCbQuery('❌ You can only buy 1 account at a time for OTP verification.', { show_alert: true });
+        }
+
         const user = await db.getUser(ctx.from.id);
         const settings = await db.getSettings();
         const price = parseFloat(settings.account_price);
-        const totalCost = price * qty;
-
-        if (parseFloat(user.balance) < totalCost) {
-            ctx.session.isBuying = false;
-            return ctx.reply(`❌ Insufficient balance! You need ${totalCost} TK to buy ${qty} accounts. Your balance is ${user.balance} TK.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
-        }
-
-        const accounts = await db.getMultipleAvailableAccounts(qty);
-        if (!accounts || accounts.length < qty) {
-            ctx.session.isBuying = false;
-            return ctx.reply(`❌ Sorry, we only have ${accounts ? accounts.length : 0} accounts left in stock. Please reduce your quantity.`).then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
-        }
-
-        // Lock funds and accounts
-        const accountIds = accounts.map(a => a.id);
-        await db.markMultipleAccountsAsSold(accountIds, ctx.from.id);
-        await db.updateUserBalance(ctx.from.id, user.balance - totalCost);
-
-        // Prepare success message
-        let successMsg = `🎉 **Successfully Purchased ${qty} Accounts!**\n\n`;
-        accounts.forEach((acc, i) => {
-            successMsg += `**Account ${i+1}:**\n📧 Email: \`${acc.email}\`\n🔑 Password: \`${acc.password}\`\n\n`;
-        });
-        successMsg += `📌 **Instructions:** Please connect to a UK VPN, create a new UK payment profile, and then create your Paysafe account.`;
-
-        ctx.replyWithAnimation('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe_card_animation_successful_202606122046.mp4', {
-            caption: successMsg,
-            parse_mode: 'Markdown'
-        }).catch(() => {
-            ctx.reply(successMsg, { parse_mode: 'Markdown' });
-        });
+        const totalCost = price;
         
-        ctx.answerCbQuery('Purchase successful!', { show_alert: true });
+        if (parseFloat(user.balance) < totalCost) {
+            return ctx.answerCbQuery('❌ Insufficient balance.', { show_alert: true });
+        }
+        
+        const sheets = require('./googleSheets');
+        const account = await sheets.getAvailableAccount();
+        
+        if (!account) {
+            bot.telegram.sendMessage(settings.admin_channel, '⚠️ Account stock is empty! Please add more accounts to the Google Sheet.');
+            return ctx.answerCbQuery('❌ Out of stock! Admin has been notified.', { show_alert: true });
+        }
+        
+        // Deduct balance
+        const newBalance = parseFloat(user.balance) - totalCost;
+        await db.updateUserBalance(ctx.from.id, newBalance);
+        
+        // Mark used
+        await sheets.markAccountUsed(account.row);
+        
+        // Save session for OTP
+        otpSessions.set(ctx.from.id, { account, attempts: 0 });
+        
+        const msg = `✅ **Purchase Successful!**\n\n` +
+                    `📧 **Email:** \`${account.email}\`\n` +
+                    `🔑 **Password:** \`${account.password}\`\n` +
+                    `📱 **Phone No:** \`${account.phoneNo}\`\n\n` +
+                    `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money to these accounts!*`;
+        
+        const kb = Markup.inlineKeyboard([
+            [Markup.button.callback('📩 Get OTP', 'get_otp')]
+        ]);
+        
+        await ctx.editMessageCaption(msg, { parse_mode: 'Markdown', ...kb });
+        await ctx.answerCbQuery('✅ Account purchased!');
     } catch (e) {
-        console.error('Purchase error:', e);
-        ctx.answerCbQuery('An error occurred during purchase.', { show_alert: true });
-    } finally {
-        ctx.session.isBuying = false;
+        console.error(e);
+        ctx.answerCbQuery('❌ An error occurred.', { show_alert: true });
     }
 });
 
+const scraper = require('./scraper');
 
-// Deposit Flow
-bot.hears('💰 Deposit', (ctx) => {
-    const kb = Markup.inlineKeyboard([
-        [Markup.button.callback('bKash', 'dep_bkash'), Markup.button.callback('Nagad', 'dep_nagad')]
-    ]);
-    return ctx.reply('Select your payment method:', kb);
-});
-
-bot.on('text', async (ctx, next) => {
-    // If message is from channel, ignore here (handled in channel_post)
-    if (ctx.chat.type !== 'private') return next();
-
-    const state = ctx.session?.state;
-    
-    if (state === 'DEPOSIT_TRXID') {
-        const trxId = ctx.message.text.trim();
-        
-        // Allow user to cancel by clicking a menu button or sending a command
-        if (trxId === '💰 Deposit' || trxId === '💳 Paysafe' || trxId === '👤 Profile' || trxId === '🎁 Refer' || trxId === '❓ Help' || trxId.startsWith('/')) {
-            ctx.session.state = null;
-            ctx.session.depositMethod = null;
-            return next();
+bot.action('get_otp', async (ctx) => {
+    try {
+        const session = otpSessions.get(ctx.from.id);
+        if (!session) {
+            return ctx.answerCbQuery('❌ Session expired or invalid. No active OTP request.', { show_alert: true });
         }
-
-        const method = ctx.session.depositMethod || 'unknown';
-        const channelTx = await db.getChannelTransaction(trxId);
         
-        if (channelTx) {
-            ctx.session.state = null;
-            ctx.session.depositMethod = null;
+        session.attempts += 1;
+        
+        await ctx.answerCbQuery('⏳ Please wait up to 2 minutes...', { show_alert: true });
+        const waitMsg = await ctx.reply('⏳ Please wait up to 2 minutes while I fetch your OTP from the server...');
+        
+        // Start scraping
+        const msgText = await scraper.scrapeOTP(session.account.otpLink);
+        
+        if (msgText) {
+            // Success
+            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
+            await ctx.reply(`✅ **OTP Found!**\n\n\`${msgText}\``, { parse_mode: 'Markdown' });
+            otpSessions.delete(ctx.from.id);
+        } else {
+            // Failed
+            await ctx.telegram.deleteMessage(ctx.chat.id, waitMsg.message_id);
             
-            if (channelTx.is_used) {
-                return ctx.reply('❌ This Transaction ID has already been used by someone!').then(msg => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, msg.message_id).catch(() => {}), 5000));
-            }
-            
-            // Mark as used
-            await db.markChannelTransactionAsUsed(trxId);
-            
-            // Save to main transactions table
-            await db.saveTransaction(trxId, channelTx.amount, ctx.from.id, method);
-            await db.verifyTransaction(trxId);
-            await db.updateUserBalance(ctx.from.id, channelTx.amount);
-            
-            // Handle Referral Bonus
-            const user = await db.getUser(ctx.from.id);
-            if (user && user.referred_by && !user.has_deposited) {
-                const referrer = await db.getUser(user.referred_by);
-                if (referrer) {
-                    const settings = await db.getSettings();
-                    const totalRefs = referrer.total_referrals;
-                    
-                    let bonus = 0;
-                    if (totalRefs < 10) {
-                        bonus = parseFloat(channelTx.amount) * (parseFloat(settings.referral_percentage) / 100);
-                    } else {
-                        bonus = parseFloat(settings.referral_fixed_bonus);
-                    }
-                    
-                    if (bonus > 0) {
-                        await db.updateUserBalance(referrer.telegram_id, bonus);
-                        try {
-                            await ctx.telegram.sendMessage(referrer.telegram_id, `🎁 You received a referral bonus of ${bonus.toFixed(2)} TK from a new user's deposit!`);
-                        } catch(e) {}
-                    }
-                    
-                    // Update referrer ref count
-                    const { supabase } = require('./db');
-                    await supabase.from('users').update({ total_referrals: totalRefs + 1 }).eq('telegram_id', referrer.telegram_id);
+            if (session.attempts >= 2) {
+                // Auto replace
+                await ctx.reply('❌ OTP not received after 2 attempts. 🔄 Getting a new account for you for FREE...');
+                
+                const sheets = require('./googleSheets');
+                const newAccount = await sheets.getAvailableAccount();
+                if (!newAccount) {
+                    return ctx.reply('❌ Sorry, out of stock for replacement! Admin notified.');
                 }
                 
-                // Mark user as deposited
-                const { supabase } = require('./db');
-                await supabase.from('users').update({ has_deposited: true }).eq('telegram_id', ctx.from.id);
+                await sheets.markAccountUsed(newAccount.row);
+                otpSessions.set(ctx.from.id, { account: newAccount, attempts: 0 });
+                
+                const newMsg = `✅ **Replacement Successful!**\n\n` +
+                               `📧 **Email:** \`${newAccount.email}\`\n` +
+                               `🔑 **Password:** \`${newAccount.password}\`\n` +
+                               `📱 **Phone No:** \`${newAccount.phoneNo}\`\n\n` +
+                               `⚠️ *These accounts are temporary and strictly for Google free trials. DO NOT add money!*`;
+                
+                const kb = Markup.inlineKeyboard([
+                    [Markup.button.callback('📩 Get OTP', 'get_otp')]
+                ]);
+                
+                await ctx.reply(newMsg, { parse_mode: 'Markdown', ...kb });
+                
+            } else {
+                await ctx.reply('❌ OTP not found yet. Please click "Get OTP" again after a minute.');
             }
-            
-            return ctx.reply(`✅ Your deposit of ${channelTx.amount} TK (TrxID: ${trxId}) has been verified and added to your balance!`);
-        } else {
-            return ctx.reply('⏳ **Transaction not found in our system yet.**\n\n📌 *Make sure you are ONLY sending the TrxID (e.g. 9A2B3C4D5E).*\n\nIf you just sent money, please wait 1-2 minutes and send the TrxID again.', { parse_mode: 'Markdown' });
         }
+    } catch (e) {
+        console.error(e);
+        ctx.answerCbQuery('❌ An error occurred.', { show_alert: true });
     }
-    
-    return next();
 });
+
 
 bot.action('dep_bkash', (ctx) => {
     ctx.session.depositMethod = 'bkash';
