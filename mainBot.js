@@ -175,7 +175,7 @@ bot.on('message', async (ctx, next) => {
         if (text === '🔙 Cancel') return next();
         
         if (text.length < 5) {
-            return ctx.reply('❌ Please send a valid Phone Number or OTP link, or click "🔙 Cancel".');
+            return ctx.reply('❌ Please send a valid Phone Number or OTP link, or click "🔙 Cancel".').then(m => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000));
         }
         
         const waitMsg = await ctx.reply('⏳ Submitting your report...');
@@ -184,14 +184,14 @@ bot.on('message', async (ctx, next) => {
         const account = await sheets.findAccountByPhoneOrLink(text);
         
         if (!account) {
-            return ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '❌ Could not find any account with that Phone Number / OTP link in the database. Please make sure it is exactly as provided.');
+            return ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '❌ Could not find any account with that Phone Number / OTP link in the database. Please make sure it is exactly as provided.').then(m => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000));
         }
         
         await sheets.logToSheet3(account, ctx.from.id);
         
         ctx.session.state = null;
-        await ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '✅ Your report has been submitted to the admin for manual verification. Please wait, if it is a valid issue you will receive a free replacement account shortly.');
-        await ctx.reply('Main Menu:', getMainMenu());
+        await ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '✅ Your report has been submitted to the admin for manual verification. Please wait, if it is a valid issue you will receive a free replacement account shortly.').then(m => { if(typeof m === 'object') setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000); });
+        await ctx.reply('Main Menu:', getMainMenu()).then(m => setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000));
         
         try {
             const adminPersonalId = '8803104187'; // Using your personal Telegram ID

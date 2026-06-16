@@ -67,9 +67,9 @@ bot.hears('🔍 Verify OTP Reports', async (ctx) => {
         const { Telegraf } = require('telegraf');
         const mainBotForMessaging = new Telegraf(process.env.MAIN_BOT_TOKEN);
         const result = await sheets.verifyOTPReports(mainBotForMessaging);
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result).then(m => { if(typeof m === 'object') setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000); });
     } catch (e) {
-        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '❌ Error checking reports: ' + e.message);
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '❌ Error checking reports: ' + e.message).then(m => { if(typeof m === 'object') setTimeout(() => ctx.telegram.deleteMessage(ctx.chat.id, m.message_id).catch(()=>{}), 10000); });
     }
 });
 

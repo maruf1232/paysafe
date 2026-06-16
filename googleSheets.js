@@ -205,7 +205,7 @@ async function verifyOTPReports(bot) {
                 } catch(e) {}
             } else {
                 try {
-                    await bot.telegram.sendMessage(userId, "❌ Your report was approved, but we are currently out of stock for replacements. Admin has been notified.");
+                    const m2 = await bot.telegram.sendMessage(userId, "❌ Your report was approved, but we are currently out of stock for replacements. Admin has been notified."); setTimeout(() => bot.telegram.deleteMessage(userId, m2.message_id).catch(()=>{}), 10000);
                 } catch(e) {}
             }
             rowsToDelete.push(row);
