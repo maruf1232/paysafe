@@ -62,7 +62,32 @@ async function countAvailableStock() {
     return count;
 }
 
+
+async function logFailedAccount(accountDetails) {
+    await init();
+    let sheet;
+    try {
+        sheet = doc.sheetsByIndex[1];
+        if (!sheet) {
+            sheet = await doc.addSheet({ headerValues: ['Account NO', 'Email', 'Password', 'Phone NO', 'OTP Link'], title: 'Sheet2' });
+        }
+    } catch (e) {
+        // Fallback if sheet creation fails
+        console.error('Error getting/creating Sheet 2:', e);
+        return;
+    }
+    
+    await sheet.addRow({
+        'Account NO': accountDetails.accountNo || '',
+        'Email': accountDetails.email || '',
+        'Password': accountDetails.password || '',
+        'Phone NO': accountDetails.phoneNo || '',
+        'OTP Link': accountDetails.otpLink || ''
+    });
+}
+
 module.exports = {
+    logFailedAccount,
     getAvailableAccount,
     markAccountUsed,
     countAvailableStock
