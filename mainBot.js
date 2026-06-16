@@ -194,10 +194,10 @@ bot.on('message', async (ctx, next) => {
         await ctx.reply('Main Menu:', getMainMenu());
         
         try {
-            const adminChannel = process.env.ADMIN_CHANNEL_ID || '-1003838765118';
+            const adminPersonalId = '8803104187'; // Using your personal Telegram ID
             const { Telegraf } = require('telegraf');
             const adminBotClient = new Telegraf(process.env.ADMIN_BOT_TOKEN);
-            await adminBotClient.telegram.sendMessage(adminChannel, `⚠️ <b>New OTP Report!</b>\nUser: <code>${ctx.from.id}</code>\nPhone/Link: ${text}\n\nPlease check Sheet 3 and verify!`, { parse_mode: 'HTML' });
+            await adminBotClient.telegram.sendMessage(adminPersonalId, `⚠️ <b>New OTP Report!</b>\nUser: <code>${ctx.from.id}</code>\nPhone/Link: ${text}\n\nPlease check Sheet 3 and verify!`, { parse_mode: 'HTML' });
         } catch (e) { console.error('Failed to notify admin:', e); }
         return;
     }
