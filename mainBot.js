@@ -53,7 +53,7 @@ bot.hears('👤 Profile', async (ctx) => {
 
 bot.hears('🎁 Refer', async (ctx) => {
     const botInfo = await bot.telegram.getMe();
-    const refLink = `https://t.me/${botInfo.username}?start=${ctx.from.id}`;
+    const refLink = `https://t.me/buy_paysafe_bot?start=${ctx.from.id}`;
     const settings = await db.getSettings();
     const msg = `🎁 **Refer and Earn!**\n\nShare this link with your friends. \nFor your first 10 referrals, you get ${settings.referral_percentage}% of their first deposit! \nAfter that, you get ${settings.referral_fixed_bonus} TK per referral's first deposit.\n\nYour Link: ${refLink}`;
     ctx.reply(msg, { parse_mode: 'Markdown' });
