@@ -30,9 +30,10 @@ const BROADCAST_TEMPLATES = {
 
 function getAdminKeyboard() {
     return Markup.keyboard([
-        ['💰 Change Price', '🔄 Checking'],
-        ['👥 User Stats', '📊 Account Stats'],
-        ['🔗 Ref Settings', '📢 Broadcast', '📝 Templates']
+        ['🔍 Verify OTP Reports', '💰 Change Price'],
+        ['🔄 Checking', '👥 User Stats'],
+        ['📊 Account Stats', '🔗 Ref Settings'],
+        ['📢 Broadcast', '📝 Templates']
     ]).resize();
 }
 
@@ -55,6 +56,21 @@ bot.hears('💰 Change Price', async (ctx) => {
     const settings = await db.getSettings();
     ctx.session.state = 'WAITING_FOR_PRICE';
     ctx.reply(`Current price is: ${settings.account_price} TK.\nEnter new price:`, Markup.removeKeyboard());
+});
+
+
+bot.hears('🔍 Verify OTP Reports', async (ctx) => {
+    if (!authedUsers.has(ctx.from.id)) return;
+    const msg = await ctx.reply('⏳ Checking Sheet 3 for verified reports...');
+    try {
+        const sheets = require('./googleSheets');
+        const { Telegraf } = require('telegraf');
+        const mainBotForMessaging = new Telegraf(process.env.MAIN_BOT_TOKEN);
+        const result = await sheets.verifyOTPReports(mainBotForMessaging);
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, result);
+    } catch (e) {
+        await ctx.telegram.editMessageText(ctx.chat.id, msg.message_id, null, '❌ Error checking reports: ' + e.message);
+    }
 });
 
 bot.hears('🔄 Checking', async (ctx) => {

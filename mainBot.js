@@ -17,7 +17,8 @@ const ADMIN_CHANNEL_ID = '-1003838765118';
 function getMainMenu() {
     return Markup.keyboard([
         ['💳 Paysafe', '💰 Deposit'],
-        ['👤 Profile', '🎁 Refer', '❓ Help']
+        ['👤 Profile', '❌ Report OTP Issue'],
+        ['🎁 Refer', '❓ Help']
     ]).resize();
 }
 
@@ -124,14 +125,13 @@ bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
         otpSessions.set(ctx.from.id, { account, replaced: false });
 
         const msg = `✅ <b>Purchase Successful!</b>\n\n` +
-                    `<blockquote>📧 <b>Email:</b> <code>${account.email}</code>\n` +
-                    `🔑 <b>Password:</b> <tg-spoiler>${account.password}</tg-spoiler>\n` +
-                    `📱 <b>Phone No:</b> <code>${account.phoneNo}</code></blockquote>\n\n` +
+                    `<blockquote>📧 <b>Email:</b>\n<code>${account.email}</code>\n\n` +
+                    `🔑 <b>Password:</b>\n<tg-spoiler>${account.password}</tg-spoiler>\n\n` +
+                    `📱 <b>Phone No:</b>\n<code>${account.phoneNo}</code></blockquote>\n\n` +
                     `⚠️ <i>These accounts are temporary and strictly for Google free trials. DO NOT add money!</i>`;
         
         const kb = Markup.inlineKeyboard([
-            [Markup.button.url('🔗 OTP Link', account.otpLink)],
-            [Markup.button.callback('❌ Didn\'t get OTP', 'replace_account')]
+            [Markup.button.url('🔗 OTP Link', account.otpLink)]
         ]);
         
         // Edit media to show the success image
@@ -155,48 +155,51 @@ bot.action(/^buy_qty_(\d+)$/, async (ctx) => {
 
 
 
-bot.action('replace_account', async (ctx) => {
-    try {
-        const session = otpSessions.get(ctx.from.id);
-        if (!session) {
-            return ctx.answerCbQuery('❌ Session expired. Please buy a new account.', { show_alert: true });
+bot.hears('❌ Report OTP Issue', (ctx) => {
+    ctx.session.state = 'AWAITING_OTP_LINK';
+    ctx.reply('🔗 Please send the **Phone Number** or **OTP Link** of the account that did not receive the OTP:', {
+        reply_markup: Markup.keyboard([['🔙 Cancel']]).resize().reply_markup,
+        parse_mode: 'Markdown'
+    });
+});
+
+bot.hears('🔙 Cancel', (ctx) => {
+    ctx.session.state = null;
+    ctx.reply('❌ Cancelled.', getMainMenu());
+});
+
+bot.on('message', async (ctx, next) => {
+    if (ctx.session && ctx.session.state === 'AWAITING_OTP_LINK' && ctx.message.text) {
+        const text = ctx.message.text.trim();
+        
+        if (text === '🔙 Cancel') return next();
+        
+        if (text.length < 5) {
+            return ctx.reply('❌ Please send a valid Phone Number or OTP link, or click "🔙 Cancel".');
         }
         
-        if (session.replaced) {
-            return ctx.answerCbQuery('❌ You have already replaced your account once. Please contact admin if you still have issues.', { show_alert: true });
-        }
-
-        await ctx.answerCbQuery('🔄 Replacing account...', { show_alert: false }).catch(()=>{});
+        const waitMsg = await ctx.reply('⏳ Submitting your report...');
         
         const sheets = require('./googleSheets');
+        const account = await sheets.findAccountByPhoneOrLink(text);
         
-        // Log the failed account to Sheet 2
-        await sheets.logFailedAccount(session.account);
-        
-        const newAccount = await sheets.getAvailableAccount();
-        if (!newAccount) {
-            return ctx.reply('❌ Sorry, out of stock for replacement! Admin notified.');
+        if (!account) {
+            return ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '❌ Could not find any account with that Phone Number / OTP link in the database. Please make sure it is exactly as provided.');
         }
         
-        await sheets.markAccountUsed(newAccount.row);
-        otpSessions.set(ctx.from.id, { account: newAccount, replaced: true });
+        await sheets.logToSheet3(account, ctx.from.id);
         
-        const newMsg = `✅ <b>Replacement Successful!</b>\n\n` +
-                       `<blockquote>📧 <b>Email:</b> <code>${newAccount.email}</code>\n` +
-                       `🔑 <b>Password:</b> <tg-spoiler>${newAccount.password}</tg-spoiler>\n` +
-                       `📱 <b>Phone No:</b> <code>${newAccount.phoneNo}</code></blockquote>\n\n` +
-                       `⚠️ <i>These accounts are temporary and strictly for Google free trials. DO NOT add money!</i>`;
+        ctx.session.state = null;
+        await ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '✅ Your report has been submitted to the admin for manual verification. Please wait, if it is a valid issue you will receive a free replacement account shortly.');
+        await ctx.reply('Main Menu:', getMainMenu());
         
-        const kb = Markup.inlineKeyboard([
-            [Markup.button.url('🔗 OTP Link', newAccount.otpLink)]
-        ]);
-        
-        await ctx.replyWithPhoto('https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png', { caption: newMsg, parse_mode: 'HTML', ...kb });
-        
-    } catch (e) {
-        console.error(e);
-        ctx.answerCbQuery('❌ An error occurred.', { show_alert: true }).catch(()=>{});
+        const settings = await require('./db').getSettings();
+        if (settings.admin_channel) {
+            ctx.telegram.sendMessage(settings.admin_channel, `⚠️ <b>New OTP Report!</b>\nUser: <code>${ctx.from.id}</code>\nPhone/Link: ${text}\n\nPlease check Sheet 3 and verify!`, { parse_mode: 'HTML' }).catch(()=>{});
+        }
+        return;
     }
+    return next();
 });
 
 bot.action('dep_bkash', (ctx) => {

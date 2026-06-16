@@ -86,7 +86,123 @@ async function logFailedAccount(accountDetails) {
     });
 }
 
+
+async function findAccountByPhoneOrLink(query) {
+    await init();
+    const sheet = doc.sheetsByIndex[0];
+    const rows = await sheet.getRows();
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const phone = row.get('Phone NO') || '';
+        const link = row.get('OTP Link') || '';
+        
+        if (phone.includes(query) || link.includes(query)) {
+            return {
+                row: row,
+                accountNo: row.get('Account NO'),
+                email: row.get('Email'),
+                password: row.get('Password'),
+                phoneNo: row.get('Phone NO'),
+                otpLink: row.get('OTP Link')
+            };
+        }
+    }
+    return null;
+}
+
+async function logToSheet3(accountDetails, userId) {
+    await init();
+    let sheet;
+    try {
+        sheet = doc.sheetsByIndex[2];
+        if (!sheet) {
+            sheet = await doc.addSheet({ headerValues: ['Account No', 'Telegram User ID', 'Email', 'Password', 'Phone No', 'OTP Link', 'OTP success', 'OTP Failed'], title: 'Sheet3' });
+        }
+    } catch (e) {
+        console.error('Error getting/creating Sheet 3:', e);
+        return;
+    }
+    
+    await sheet.addRow({
+        'Account No': accountDetails.accountNo || '',
+        'Telegram User ID': userId || '',
+        'Email': accountDetails.email || '',
+        'Password': accountDetails.password || '',
+        'Phone No': accountDetails.phoneNo || '',
+        'OTP Link': accountDetails.otpLink || '',
+        'OTP success': 'FALSE',
+        'OTP Failed': 'FALSE'
+    });
+}
+
+async function verifyOTPReports(bot) {
+    await init();
+    let sheet = doc.sheetsByIndex[2];
+    if (!sheet) return "No Sheet 3 found.";
+    
+    const rows = await sheet.getRows();
+    if (rows.length === 0) return "✅ No pending reports in Sheet 3.";
+    
+    let processed = 0;
+    const rowsToDelete = [];
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const success = (row.get('OTP success') || '').toUpperCase();
+        const failed = (row.get('OTP Failed') || '').toUpperCase();
+        const userId = row.get('Telegram User ID');
+        
+        const isSuccessChecked = success === 'TRUE' || success === 'YES';
+        const isFailedChecked = failed === 'TRUE' || failed === 'YES';
+        
+        if (isSuccessChecked && userId) {
+            try {
+                await bot.telegram.sendMessage(userId, "✅ <b>OTP Verified!</b>\n\nWe checked your report and the OTP has successfully arrived. Please check the link again.", { parse_mode: 'HTML' });
+            } catch(e) {}
+            rowsToDelete.push(row);
+            processed++;
+        } else if (isFailedChecked && userId) {
+            // Need to give a new account
+            const newAccount = await getAvailableAccount();
+            if (newAccount) {
+                await markAccountUsed(newAccount.row);
+                const msg = `✅ <b>Replacement Successful!</b>\n\n` +
+                            `<blockquote>📧 <b>Email:</b> \n<code>${newAccount.email}</code>\n\n` +
+                            `🔑 <b>Password:</b> \n<tg-spoiler>${newAccount.password}</tg-spoiler>\n\n` +
+                            `📱 <b>Phone No:</b> \n<code>${newAccount.phoneNo}</code></blockquote>\n\n` +
+                            `⚠️ <i>These accounts are temporary and strictly for Google free trials. DO NOT add money!</i>`;
+                
+                const { Markup } = require('telegraf');
+                const kb = Markup.inlineKeyboard([
+                    [Markup.button.url('🔗 OTP Link', newAccount.otpLink)]
+                ]);
+                
+                try {
+                    await bot.telegram.sendPhoto(userId, 'https://cyrjsbfsfhcwocdqtkuv.supabase.co/storage/v1/object/public/Maruf/Paysafe%20buy%20account%20successs.png', { caption: msg, parse_mode: 'HTML', ...kb });
+                } catch(e) {}
+            } else {
+                try {
+                    await bot.telegram.sendMessage(userId, "❌ Your report was approved, but we are currently out of stock for replacements. Admin has been notified.");
+                } catch(e) {}
+            }
+            rowsToDelete.push(row);
+            processed++;
+        }
+    }
+    
+    // Delete from bottom to top to avoid index shifting
+    for (let i = rowsToDelete.length - 1; i >= 0; i--) {
+        await rowsToDelete[i].delete();
+    }
+    
+    return `✅ Verification complete! Processed ${processed} reports.`;
+}
+
 module.exports = {
+    findAccountByPhoneOrLink,
+    logToSheet3,
+    verifyOTPReports,
     logFailedAccount,
     getAvailableAccount,
     markAccountUsed,
