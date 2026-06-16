@@ -193,10 +193,12 @@ bot.on('message', async (ctx, next) => {
         await ctx.telegram.editMessageText(ctx.chat.id, waitMsg.message_id, null, '✅ Your report has been submitted to the admin for manual verification. Please wait, if it is a valid issue you will receive a free replacement account shortly.');
         await ctx.reply('Main Menu:', getMainMenu());
         
-        const settings = await require('./db').getSettings();
-        if (settings.admin_channel) {
-            ctx.telegram.sendMessage(settings.admin_channel, `⚠️ <b>New OTP Report!</b>\nUser: <code>${ctx.from.id}</code>\nPhone/Link: ${text}\n\nPlease check Sheet 3 and verify!`, { parse_mode: 'HTML' }).catch(()=>{});
-        }
+        try {
+            const adminChannel = process.env.ADMIN_CHANNEL_ID || '-1003838765118';
+            const { Telegraf } = require('telegraf');
+            const adminBotClient = new Telegraf(process.env.ADMIN_BOT_TOKEN);
+            await adminBotClient.telegram.sendMessage(adminChannel, `⚠️ <b>New OTP Report!</b>\nUser: <code>${ctx.from.id}</code>\nPhone/Link: ${text}\n\nPlease check Sheet 3 and verify!`, { parse_mode: 'HTML' });
+        } catch (e) { console.error('Failed to notify admin:', e); }
         return;
     }
     return next();

@@ -115,25 +115,47 @@ async function logToSheet3(accountDetails, userId) {
     await init();
     let sheet;
     try {
-        sheet = doc.sheetsByIndex[2];
+        sheet = doc.sheetsByTitle['Sheet3'];
         if (!sheet) {
-            sheet = await doc.addSheet({ headerValues: ['Account No', 'Telegram User ID', 'Email', 'Password', 'Phone No', 'OTP Link', 'OTP success', 'OTP Failed'], title: 'Sheet3' });
+            sheet = doc.sheetsByIndex[2];
         }
     } catch (e) {
         console.error('Error getting/creating Sheet 3:', e);
         return;
     }
     
-    await sheet.addRow({
-        'Account No': accountDetails.accountNo || '',
-        'Telegram User ID': userId || '',
-        'Email': accountDetails.email || '',
-        'Password': accountDetails.password || '',
-        'Phone No': accountDetails.phoneNo || '',
-        'OTP Link': accountDetails.otpLink || '',
-        'OTP success': 'FALSE',
-        'OTP Failed': 'FALSE'
-    });
+    if (!sheet) return;
+
+    const rows = await sheet.getRows();
+    let targetRow = null;
+    
+    for (let i = 0; i < rows.length; i++) {
+        if (!rows[i].get('Account No')) {
+            targetRow = rows[i];
+            break;
+        }
+    }
+    
+    if (targetRow) {
+        targetRow.set('Account No', accountDetails.accountNo || '');
+        targetRow.set('Telegram User ID', userId || '');
+        targetRow.set('Email', accountDetails.email || '');
+        targetRow.set('Password', accountDetails.password || '');
+        targetRow.set('Phone No', accountDetails.phoneNo || '');
+        targetRow.set('OTP Link', accountDetails.otpLink || '');
+        await targetRow.save();
+    } else {
+        await sheet.addRow({
+            'Account No': accountDetails.accountNo || '',
+            'Telegram User ID': userId || '',
+            'Email': accountDetails.email || '',
+            'Password': accountDetails.password || '',
+            'Phone No': accountDetails.phoneNo || '',
+            'OTP Link': accountDetails.otpLink || '',
+            'OTP success': 'FALSE',
+            'OTP Failed': 'FALSE'
+        });
+    }
 }
 
 async function verifyOTPReports(bot) {
